@@ -150,7 +150,7 @@ make restart
 
 ### Advanced Search (AI-powered)
 
-The **`/ask`** endpoint accepts natural language questions and uses the Vanna AI engine to generate SQL. To enable it: query agent can be updated to call `/ask` instead of `/search_records`
+The **`/ask`** endpoint accepts natural language questions and uses the AI engine to generate SQL. To enable it: query agent can be updated to call `/ask` instead of `/search_records`
 
 
 ### Enter OTP manually (no IMAP)
@@ -164,11 +164,11 @@ The **`/ask`** endpoint accepts natural language questions and uses the Vanna AI
 
 TMLink's search operates on **linkage results**, not on the raw uploaded file. This means:
 
-1. You upload a CSV with patient records (e.g. 30 rows)
+1. You upload a CSV with records (e.g. 500 rows)
 2. TMLink's linkage engine compares every pair and finds near-duplicates (e.g. `John Michael` ≈ `Jon Michael` ≈ `Jonathan Michaels`)
 3. Each record gets a `similar_record` and `similarity_score` in the output
 4. **Basic search** (`/search_records`): enter a name → returns that record and its duplicates found during linkage
-5. **Advanced search** (`/ask`): natural language → Vanna AI generates SQL → runs against linked dataset
+5. **Advanced search** (`/ask`): natural language → AI generates SQL → runs against linked dataset
 
 Search returns **no results** if linkage hasn't been run yet, or if the dataset has no similar records.
 
