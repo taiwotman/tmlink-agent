@@ -1,4 +1,4 @@
-# TMLink 3-Agent System
+# TMLink n8n-Agent System
 
 An automated record linkage system built on the **official `taiwotman/tmlink` Docker image** — no source code required. Three n8n agents handle registration, file upload/approval, and record search through a simple web UI.
 
