@@ -1,0 +1,61 @@
+{
+  "name": "TMLink Linkage Status",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "linkage-status",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Status Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 300],
+      "webhookId": "linkage-status-webhook"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://auth-store:8080/auth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "name": "Read Auth Store",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({status: $json.status, message: $json.linkage_message || null}) }}",
+        "options": {}
+      },
+      "name": "Respond with Status",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [650, 300]
+    }
+  ],
+  "connections": {
+    "Status Webhook": {
+      "main": [[{"node": "Read Auth Store", "type": "main", "index": 0}]]
+    },
+    "Read Auth Store": {
+      "main": [[{"node": "Respond with Status", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "id": "linkage-status-workflow",
+  "active": true
+}

@@ -1,0 +1,130 @@
+{
+  "name": "TMLink Register Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "register-agent",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "reg-webhook",
+      "name": "Register Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ],
+      "webhookId": "register-agent"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://tmlink-official:8000/recordlinkage/auth/api/",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "firstname",
+              "value": "={{ $json.body.firstname }}"
+            },
+            {
+              "name": "lastname",
+              "value": "={{ $json.body.lastname }}"
+            },
+            {
+              "name": "email",
+              "value": "={{ $json.body.email }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "do-register",
+      "name": "Call /register",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "continueOnFail": true,
+      "position": [
+        450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 2xx: body is in $json.data (responseFormat:text)\n// 4xx with continueOnFail: body is embedded in $json.error.message as '400 - {json}'\nlet body = $json.data || '';\nconst httpError = $json.error;\nif (!body && httpError && httpError.message) {\n  const dashIdx = httpError.message.indexOf(' - ');\n  body = dashIdx !== -1 ? httpError.message.substring(dashIdx + 3) : httpError.message;\n}\nconst statusCode = (httpError && httpError.status) || 200;\n\nlet parsed = {};\ntry { parsed = JSON.parse(body); } catch(e) { parsed = {}; }\n\nconst detail = parsed.detail || parsed.error || null;\nconst lowerBody = body.toLowerCase();\n\nif (detail) {\n  const msg = typeof detail === 'string' ? detail : JSON.stringify(detail);\n  if (msg.toLowerCase().includes('already exist')) {\n    return [{json: {status: 'already_registered', message: 'This email is already registered. Head to the Link Records tab to upload and link your data.'}}];\n  }\n  return [{json: {status: 'error', detail: msg}}];\n}\nif (lowerBody.includes('already exist')) {\n  return [{json: {status: 'already_registered', message: 'This email is already registered. Head to the Link Records tab to upload and link your data.'}}];\n}\nif (statusCode >= 400 || lowerBody.includes('error') || lowerBody.includes('invalid')) {\n  return [{json: {status: 'error', detail: body || 'Registration failed.'}}];\n}\nreturn [{json: {status: 'code_sent', message: 'Registration started. Check your email for a verification code.'}}];"
+      },
+      "id": "parse-register",
+      "name": "Parse Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        650,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "respond-register",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        850,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Register Webhook": {
+      "main": [
+        [
+          {
+            "node": "Call /register",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call /register": {
+      "main": [
+        [
+          {
+            "node": "Parse Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "id": "YFpqBNyG2DDg49s8",
+  "active": true
+}

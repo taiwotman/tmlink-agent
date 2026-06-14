@@ -1,0 +1,101 @@
+services:
+
+  # ── Official TMLink Image (frontend + backend in one) ────────
+  tmlink:
+    image: taiwotman/tmlink:latest
+    container_name: tmlink-official
+    restart: unless-stopped
+    ports:
+      - "${PORT_TMLINK_UI:-8501}:8501"
+    environment:
+      - TMLINK_EMAIL=${TMLINK_EMAIL}
+      - GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD}
+      - SMTP_FROM=${SMTP_FROM}
+    volumes:
+      - tmlink_db:/var/lib/postgresql/13/main
+      - tmlink_hf_cache:/root/.cache/huggingface
+    networks:
+      - tmlink-network
+    healthcheck:
+      test: ["CMD", "./venv/bin/python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/recordlinkage/auth/api/num_registered_users')"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 300s
+
+  # ── Auth Store — shared session cookie microservice ──────────
+  auth-store:
+    build:
+      context: ./auth-store
+      dockerfile: Dockerfile
+    container_name: tmlink-auth-store
+    restart: unless-stopped
+    environment:
+      - DATA_PATH=/data/auth.json
+      - TMLINK_EMAIL=${TMLINK_EMAIL}
+      - LOGIN_COOLDOWN_MINUTES=${LOGIN_COOLDOWN_MINUTES:-5}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - tmlink_shared:/data
+    networks:
+      - tmlink-network
+
+  # ── Agents UI (nginx) ────────────────────────────────────────
+  agents-ui:
+    build:
+      context: ./agents-ui
+      dockerfile: Dockerfile
+    container_name: tmlink-agents-ui
+    restart: unless-stopped
+    ports:
+      - "${PORT_AGENTS_UI:-3001}:80"
+    environment:
+      - N8N_BASE=${N8N_BASE:-http://localhost:5678/webhook}
+      - TMLINK_API_BASE=${TMLINK_API_BASE:-http://localhost:8001}
+    networks:
+      - tmlink-network
+    depends_on:
+      tmlink:
+        condition: service_healthy
+
+  # ── n8n Workflow Automation ──────────────────────────────────
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: n8n
+    restart: unless-stopped
+    ports:
+      - "${PORT_N8N:-5678}:5678"
+    environment:
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost:5678/}
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-UTC}
+      - N8N_TEMPLATES_ENABLED=false
+      - N8N_RUNNERS_ENABLED=false
+      - N8N_DEFAULT_BINARY_DATA_MODE=default
+      # Variables used by n8n agent workflows ($env.VARNAME)
+      - TMLINK_API_URL=${TMLINK_API_URL:-http://tmlink-official:8000}
+      - APPROVER_EMAIL=${APPROVER_EMAIL}
+      - SMTP_FROM=${SMTP_FROM}
+      - GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - tmlink_shared:/tmp/tmlink:rw
+      - ./n8n/workflows:/workflows:ro
+    networks:
+      - tmlink-network
+    depends_on:
+      tmlink:
+        condition: service_healthy
+
+networks:
+  tmlink-network:
+    driver: bridge
+
+volumes:
+  n8n_data:
+  tmlink_shared:
+  tmlink_db:
+  tmlink_hf_cache:

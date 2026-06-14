@@ -1,0 +1,207 @@
+{
+  "name": "TMLink OTP Submit",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "submit-otp",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "otp-webhook",
+      "name": "OTP Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ],
+      "webhookId": "submit-otp"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://auth-store:8080/auth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "read-auth",
+      "name": "Read Auth State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://tmlink-official:8000/recordlinkage/auth/api/verify_login",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "email",
+              "value": "={{ $('Read Auth State').item.json.email }}"
+            },
+            {
+              "name": "code",
+              "value": "={{ $('OTP Webhook').item.json.body.code }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "verify-login",
+      "name": "Verify Login",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "continueOnFail": true,
+      "position": [
+        650,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const headers = $json.headers || {};\nconst setCookie = headers['set-cookie'] || headers['Set-Cookie'] || [];\nconst cookieArr = Array.isArray(setCookie) ? setCookie : [setCookie];\nconst rawCookie = cookieArr[0] || '';\nconst sessionCookie = rawCookie.split(';')[0].trim();\nif (!sessionCookie) {\n  return [{json: {status: 'error', message: 'Invalid or expired code. Please try again.'}}];\n}\nreturn [{json: {status: 'authenticated', cookie: sessionCookie}}];"
+      },
+      "id": "extract-cookie",
+      "name": "Extract Cookie",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        850,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://auth-store:8080/auth",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "cookie",
+              "value": "={{ $json.cookie }}"
+            },
+            {
+              "name": "status",
+              "value": "=authenticated"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "store-cookie",
+      "name": "Store Cookie",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "continueOnFail": true,
+      "position": [
+        1050,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1250,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "OTP Webhook": {
+      "main": [
+        [
+          {
+            "node": "Read Auth State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Auth State": {
+      "main": [
+        [
+          {
+            "node": "Verify Login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Login": {
+      "main": [
+        [
+          {
+            "node": "Extract Cookie",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Cookie": {
+      "main": [
+        [
+          {
+            "node": "Store Cookie",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Cookie": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "id": "otp-submit-workflow",
+  "active": true
+}

@@ -1,0 +1,442 @@
+{
+  "name": "TMLink Auth Sub-Workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://auth-store:8080/auth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "name": "Read Auth State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-1",
+              "leftValue": "={{ $('Read Auth State').first().json.cookie }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ]
+        }
+      },
+      "name": "Has Cookie?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        650,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://tmlink-official:8000/recordlinkage/api/upload_file_to_link",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "={{ $('Read Auth State').first().json.cookie }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "name": "Validate Cookie",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "continueOnFail": true,
+      "position": [
+        850,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cond-valid",
+              "leftValue": "={{ $json.error ? $json.error.status : null }}",
+              "rightValue": "403",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ]
+        }
+      },
+      "name": "Cookie Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1050,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cookie = $('Read Auth State').first().json.cookie;\nreturn [{json: {authenticated: true, cookie: cookie, message: 'Already authenticated'}}];"
+      },
+      "name": "Return Authenticated",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1250,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://auth-store:8080/auth",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "cookie",
+              "value": "="
+            },
+            {
+              "name": "status",
+              "value": "=unauthenticated"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Clear Stale Cookie",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1250,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://auth-store:8080/auth",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "trigger_login",
+              "value": "=true"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "name": "Request Login",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        850,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-1",
+              "leftValue": "={{ $json.login_blocked }}",
+              "rightValue": "yes",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "name": "Login Blocked?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1050,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json: {authenticated: false, cookie: null, message: 'Authentication in progress. Please retry in 30 seconds.'}}];"
+      },
+      "name": "Return Blocked",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1250,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://tmlink-official:8000/recordlinkage/auth/api/login",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "email",
+              "value": "={{ $('Read Auth State').item.json.email }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "name": "Call /login",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "continueOnFail": true,
+      "position": [
+        1250,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://auth-store:8080/auth",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "=waiting"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Mark Waiting",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1450,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json: {authenticated: false, cookie: null, message: 'Authentication in progress. Please retry in 30 seconds.'}}];"
+      },
+      "name": "Return Authenticating",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1650,
+        460
+      ]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read Auth State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Auth State": {
+      "main": [
+        [
+          {
+            "node": "Has Cookie?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Cookie?": {
+      "main": [
+        [
+          {
+            "node": "Validate Cookie",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Request Login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Cookie": {
+      "main": [
+        [
+          {
+            "node": "Cookie Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cookie Valid?": {
+      "main": [
+        [
+          {
+            "node": "Return Authenticated",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Clear Stale Cookie",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clear Stale Cookie": {
+      "main": [
+        [
+          {
+            "node": "Request Login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request Login": {
+      "main": [
+        [
+          {
+            "node": "Login Blocked?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login Blocked?": {
+      "main": [
+        [
+          {
+            "node": "Return Blocked",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call /login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call /login": {
+      "main": [
+        [
+          {
+            "node": "Mark Waiting",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Waiting": {
+      "main": [
+        [
+          {
+            "node": "Return Authenticating",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "id": "tmlink-auth-subworkflow",
+  "active": true
+}

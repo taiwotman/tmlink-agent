@@ -1,0 +1,949 @@
+{
+  "name": "TMLink Link Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "link-sched",
+      "name": "Schedule (Hourly)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        200,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "link-agent",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "link-webhook",
+      "name": "Link Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        200,
+        500
+      ],
+      "webhookId": "link-agent"
+    },
+    {
+      "parameters": {
+        "workflowId": "tmlink-auth-subworkflow",
+        "options": {}
+      },
+      "id": "get-auth-s",
+      "name": "Get Auth (Schedule)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [
+        440,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://auth-store:8080/auth",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "email",
+              "value": "={{ $json.body.userEmail || '' }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "set-user-email",
+      "name": "Set User Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "continueOnFail": true,
+      "position": [
+        440,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": "tmlink-auth-subworkflow",
+        "options": {}
+      },
+      "id": "get-auth-w",
+      "name": "Get Auth (Webhook)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [
+        620,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "auth-s",
+              "leftValue": "={{ $json.authenticated }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "auth-ok-s",
+      "name": "Auth OK? (Schedule)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        680,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "auth-w",
+              "leftValue": "={{ $json.authenticated }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "auth-ok-w",
+      "name": "Auth OK? (Webhook)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        680,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://tmlink-official:8000/recordlinkage/api/link_record",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "string",
+        "body": "{\"cols\":[]}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "={{ $('Get Auth (Schedule)').item.json.cookie }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 120000
+        }
+      },
+      "id": "link-sched-run",
+      "name": "Run Linkage (Schedule)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        920,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const webhookItem = $('Link Webhook').item;\nconst binary = webhookItem.binary || {};\nconst binaryKeys = Object.keys(binary);\nconst hasBinary = binaryKeys.length > 0;\nconst cookie = $('Get Auth (Webhook)').item.json.cookie;\n\nif (hasBinary) {\n  const binaryKey = binaryKeys[0];\n  const binaryProp = binary[binaryKey];\n  const staticData = $getWorkflowStaticData('global');\n  staticData.pendingFile = {\n    data: binaryProp.data,\n    mimeType: binaryProp.mimeType || 'text/csv',\n    fileName: binaryProp.fileName || 'upload.csv',\n    cookie\n  };\n  return [{\n    json: {\n      hasBinary: true,\n      fileName: binaryProp.fileName || 'upload.csv',\n      cookie\n    }\n  }];\n}\n\nreturn [{\n  json: { hasBinary: false, fileName: null, cookie }\n}];"
+      },
+      "id": "check-context",
+      "name": "Check Trigger Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        920,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Save file to static data if present, even during auth wait\nconst webhookItem = $('Link Webhook').item;\nconst binary = webhookItem.binary || {};\nconst binaryKeys = Object.keys(binary);\nif (binaryKeys.length > 0) {\n  const binaryProp = binary[binaryKeys[0]];\n  const staticData = $getWorkflowStaticData('global');\n  staticData.pendingFile = {\n    data: binaryProp.data,\n    mimeType: binaryProp.mimeType || 'text/csv',\n    fileName: binaryProp.fileName || 'upload.csv'\n  };\n}\nreturn [{json: {status: 'authenticating', message: 'TMLink is logging in via email OTP. This takes about 30 seconds. Please wait\u2026'}}];"
+      },
+      "id": "auth-in-progress",
+      "name": "Auth In Progress",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        920,
+        660
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "respond-auth",
+      "name": "Respond Auth Status",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1140,
+        660
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-file",
+              "leftValue": "={{ $json.hasBinary }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "has-file",
+      "name": "Has File?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resumeUrl = $execution.resumeUrl.replace('http://localhost:5678', 'http://localhost:3001/n8n').replace('http://n8n:5678', 'http://localhost:3001/n8n');\nconst approveUrl = resumeUrl + '&approved=true';\nconst rejectUrl  = resumeUrl + '&approved=false';\nreturn [{json: {fileName: $json.fileName, approveUrl, rejectUrl, cookie: $json.cookie}}];"
+      },
+      "id": "prep-approval",
+      "name": "Prepare Approval",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({status: 'pending_approval', fileName: $json.fileName, approveUrl: $json.approveUrl, rejectUrl: $json.rejectUrl}) }}",
+        "options": {}
+      },
+      "id": "respond-pending",
+      "name": "Respond Pending",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1580,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "resume": "webhook",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html"
+              }
+            ]
+          },
+          "responseData": "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>TMLink</title><style>body{font-family:sans-serif;background:#0f172a;color:#e2e8f0;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}.box{background:#1e293b;border-radius:1rem;padding:2.5rem 3rem;text-align:center;border:1px solid #334155;max-width:420px}.icon{font-size:3rem;margin-bottom:1rem}.title{font-size:1.3rem;font-weight:700;margin-bottom:.5rem}.sub{color:#94a3b8;font-size:.9rem}</style></head><body><div class='box'><div class='icon'>\u2705</div><div class='title'>Decision recorded</div><div class='sub'>You can close this tab. The system will process your decision automatically.</div></div></body></html>"
+        }
+      },
+      "id": "wait-decision",
+      "name": "Wait for Decision",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1580,
+        460
+      ],
+      "webhookId": "link-approval"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "is-approved",
+              "leftValue": "={{ $json.query.approved }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "approved",
+      "name": "Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": "tmlink-auth-subworkflow",
+        "options": {}
+      },
+      "id": "re-auth",
+      "name": "Re-Authenticate",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [
+        2020,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "reauth-ok",
+              "leftValue": "={{ $json.authenticated }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "reauth-ok",
+      "name": "Re-Auth OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json: {status: 'auth_failed', message: 'Session expired after approval. Check your email for a new OTP code, submit it via the Search tab, then click Run Linkage (existing data) \u2014 or re-upload the file.'}}];"
+      },
+      "id": "fmt-auth-expired",
+      "name": "Format Auth Expired",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2460,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst pending = staticData.pendingFile;\nif (!pending) throw new Error('No pending file found in static data.');\nconst freshCookie = $('Re-Authenticate').item.json.cookie || pending.cookie;\nif (!freshCookie) throw new Error('No valid session cookie.');\n\n// Read CSV header and map column names to TMLink API type codes\nconst csvHeader = Buffer.from(pending.data, 'base64').toString('utf8').split(/\\r?\\n/)[0];\nconst cols = csvHeader.split(',').map(c => c.trim().replace(/^\\\"|\\\"$/g, '').toLowerCase());\n\nconst fnMap = {fname:'fname',first_name:'fname',firstname:'fname',fname_c1:'fname',given_name:'fname',givenname:'fname',forename:'fname'};\nconst lnMap = {lname:'lname',last_name:'lname',lastname:'lname',lname_c1:'lname',surname:'lname',family_name:'lname',familyname:'lname'};\n\nconst fnCode = cols.map(c => fnMap[c]).find(Boolean) || null;\nconst lnCode = cols.map(c => lnMap[c]).find(Boolean) || null;\nconst apiCols = [fnCode, lnCode].filter(Boolean);\n\nreturn [{\n  json: { cookie: freshCookie, fileName: pending.fileName, cols: apiCols },\n  binary: {\n    file: {\n      data: pending.data,\n      mimeType: pending.mimeType || 'text/csv',\n      fileName: pending.fileName || 'upload.csv'\n    }\n  }\n}];"
+      },
+      "id": "restore-file",
+      "name": "Restore File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://tmlink-official:8000/recordlinkage/api/upload_file_to_link",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "file"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "={{ $json.cookie }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "upload-file",
+      "name": "Upload File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        2460,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const uploadResult = $('Upload File').item.json;\nconst groups = uploadResult.matched_groups || {};\nconst cookie = $('Restore File').item.json.cookie;\n\n// Use actual CSV column names from matched_groups (not type codes)\nconst firstNameCols = groups.first_name || [];\nconst lastNameCols = groups.last_name || [];\n\nif (!firstNameCols.length || !lastNameCols.length) {\n  throw new Error('CSV missing detectable first or last name columns');\n}\n\nlet cols = [firstNameCols[0], lastNameCols[0]];\n\nconst optionalGroups = ['birth_year','birth_month','birth_day','sex','age','address','zipcode','zip','phone'];\nconst excludedGroups = new Set(['first_name','last_name','record_id','entity_id']);\nfor (const [cat, colList] of Object.entries(groups)) {\n  if (cols.length >= 10) break;\n  if (excludedGroups.has(cat)) continue;\n  if (!optionalGroups.includes(cat)) continue;\n  const col = colList[0];\n  if (col && !cols.includes(col)) cols.push(col);\n}\n\nreturn [{ json: { cookie, cols: cols.slice(0, 10) } }];"
+      },
+      "id": "build-link-cols",
+      "name": "Build Link Cols",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2570,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://tmlink-official:8000/recordlinkage/api/link_record",
+        "sendBody": true,
+        "contentType": "json",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "={{ $json.cookie }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 600000
+        },
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({cols: $json.cols}) }}"
+      },
+      "id": "link-after-upload",
+      "name": "Run Linkage (After Upload)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        2790,
+        360
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const linkResult = $('Run Linkage (After Upload)').item.json;\nconst err = linkResult.error;\nconst msg = err\n  ? 'Linkage error: ' + (err.message || JSON.stringify(err))\n  : (linkResult.Message || linkResult.message || JSON.stringify(linkResult));\nconst status = err ? 'linkage_error' : 'linkage_done';\nreturn [{json: {status, message: msg, linkage_message: msg}}];"
+      },
+      "id": "fmt-success",
+      "name": "Format Success",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3010,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://auth-store:8080/auth",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "={{ $json.status }}"
+            },
+            {
+              "name": "linkage_message",
+              "value": "={{ $json.message }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "write-linkage-status",
+      "name": "Write Linkage Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "continueOnFail": true,
+      "position": [
+        3230,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const tls = require('node:tls');\nconst host = 'smtp.gmail.com';\nconst port = 465;\nconst user = $env.SMTP_FROM || '';\nconst pass = $env.GMAIL_APP_PASSWORD || '';\nconst webhookBody = $('Link Webhook').item.json.body || {};\nconst to = webhookBody.approverEmail || webhookBody.userEmail || $env.APPROVER_EMAIL || '';\nif (!user || !pass || !to) return [{json: {emailSent: false, reason: 'SMTP not configured or no approver email provided'}}];\n\nconst fileName  = $json.fileName  || 'unknown';\nconst approveUrl = $json.approveUrl || '';\nconst rejectUrl  = $json.rejectUrl  || '';\nconst subject = `[TMLink Approval Needed] ${fileName}`;\nconst body = [\n  'A file has been uploaded to TMLink and is awaiting your approval.',\n  '',\n  'File: ' + fileName,\n  '',\n  'Open one of these links in your browser (must be on the same machine as TMLink):',\n  '',\n  'APPROVE: ' + approveUrl,\n  'REJECT:  ' + rejectUrl,\n  '',\n  '-- TMLink Agent'\n].join('\\r\\n');\n\nconst msg = [\n  'From: TMLink <' + user + '>',\n  'To: ' + to,\n  'Subject: ' + subject,\n  'Date: ' + new Date().toUTCString(),\n  'MIME-Version: 1.0',\n  'Content-Type: text/plain; charset=UTF-8',\n  '',\n  body\n].join('\\r\\n');\n\nawait new Promise((resolve, reject) => {\n  const socket = tls.connect({ host, port, servername: host }, () => {\n    let buf = '';\n    let step = 0;\n    socket.on('data', chunk => {\n      buf += chunk.toString();\n      const lines = buf.split('\\r\\n');\n      buf = lines.pop();\n      for (const line of lines) {\n        if (!line) continue;\n        const code = parseInt(line.slice(0, 3), 10);\n        const last = line[3] !== '-';\n        if (!last) continue;\n        if (code >= 400) { socket.destroy(); reject(new Error('SMTP: ' + line)); return; }\n        switch (step) {\n          case 0: if (code === 220) { socket.write('EHLO localhost\\r\\n'); step++; } break;\n          case 1: if (code === 250) { socket.write('AUTH LOGIN\\r\\n'); step++; } break;\n          case 2: if (code === 334) { socket.write(Buffer.from(user).toString('base64') + '\\r\\n'); step++; } break;\n          case 3: if (code === 334) { socket.write(Buffer.from(pass).toString('base64') + '\\r\\n'); step++; } break;\n          case 4: if (code === 235) { socket.write('MAIL FROM:<' + user + '>\\r\\n'); step++; } break;\n          case 5: if (code === 250) { socket.write('RCPT TO:<' + to + '>\\r\\n'); step++; } break;\n          case 6: if (code === 250) { socket.write('DATA\\r\\n'); step++; } break;\n          case 7: if (code === 354) { socket.write(msg + '\\r\\n.\\r\\n'); step++; } break;\n          case 8: if (code === 250) { socket.write('QUIT\\r\\n'); step++; } break;\n          case 9: if (code === 221) { socket.end(); resolve(); } break;\n        }\n      }\n    });\n    socket.on('error', reject);\n  });\n  socket.on('error', reject);\n});\n\nreturn [{json: {emailSent: true, to, subject}}];"
+      },
+      "id": "send-approval-email",
+      "name": "Send Approval Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "continueOnFail": true,
+      "position": [
+        1580,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json: {status: 'rejected', message: 'File was rejected. No data was uploaded or linked.'}}];"
+      },
+      "id": "fmt-rejection",
+      "name": "Format Rejection",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2020,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://tmlink-official:8000/recordlinkage/api/link_record",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "string",
+        "body": "{\"cols\":[]}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "={{ $('Get Auth (Webhook)').item.json.cookie }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 120000
+        }
+      },
+      "id": "link-no-file",
+      "name": "Run Linkage (No File)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1360,
+        580
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json: {status: 'completed', message: 'Record linkage completed on existing data.'}}];"
+      },
+      "id": "fmt-no-file",
+      "name": "Format Linkage Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1580,
+        580
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1800,
+        580
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule (Hourly)": {
+      "main": [
+        [
+          {
+            "node": "Get Auth (Schedule)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Link Webhook": {
+      "main": [
+        [
+          {
+            "node": "Set User Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set User Email": {
+      "main": [
+        [
+          {
+            "node": "Get Auth (Webhook)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Auth (Schedule)": {
+      "main": [
+        [
+          {
+            "node": "Auth OK? (Schedule)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Auth (Webhook)": {
+      "main": [
+        [
+          {
+            "node": "Auth OK? (Webhook)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auth OK? (Schedule)": {
+      "main": [
+        [
+          {
+            "node": "Run Linkage (Schedule)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Auth OK? (Webhook)": {
+      "main": [
+        [
+          {
+            "node": "Check Trigger Context",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Auth In Progress",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Trigger Context": {
+      "main": [
+        [
+          {
+            "node": "Has File?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auth In Progress": {
+      "main": [
+        [
+          {
+            "node": "Respond Auth Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has File?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Approval",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Run Linkage (No File)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Approval": {
+      "main": [
+        [
+          {
+            "node": "Respond Pending",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Wait for Decision",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Approval Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Decision": {
+      "main": [
+        [
+          {
+            "node": "Approved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approved?": {
+      "main": [
+        [
+          {
+            "node": "Re-Authenticate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Rejection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Re-Authenticate": {
+      "main": [
+        [
+          {
+            "node": "Re-Auth OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Re-Auth OK?": {
+      "main": [
+        [
+          {
+            "node": "Restore File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Auth Expired",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore File": {
+      "main": [
+        [
+          {
+            "node": "Upload File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload File": {
+      "main": [
+        [
+          {
+            "node": "Build Link Cols",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Link Cols": {
+      "main": [
+        [
+          {
+            "node": "Run Linkage (After Upload)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Linkage (After Upload)": {
+      "main": [
+        [
+          {
+            "node": "Format Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Linkage (No File)": {
+      "main": [
+        [
+          {
+            "node": "Format Linkage Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Linkage Result": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Success": {
+      "main": [
+        [
+          {
+            "node": "Write Linkage Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Linkage Status": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "id": "NA75Lt2HXfZpwl0V",
+  "active": true
+}

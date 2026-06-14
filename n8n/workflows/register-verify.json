@@ -1,0 +1,126 @@
+{
+  "name": "TMLink Register Verify",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "register-verify",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "verify-webhook",
+      "name": "Verify Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ],
+      "webhookId": "register-verify"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://tmlink-official:8000/recordlinkage/auth/api/verify_email",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "email",
+              "value": "={{ $json.body.email }}"
+            },
+            {
+              "name": "verify_code",
+              "value": "={{ $json.body.verify_code }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "do-verify",
+      "name": "Call /verify_login",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "continueOnFail": true,
+      "position": [
+        450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// responseFormat:text puts body in $json.data as a string\nconst body = $json.data || '';\nlet parsed = {};\ntry { parsed = JSON.parse(body); } catch(e) { parsed = {}; }\n\nconst detail = parsed.detail || parsed.error || null;\nconst lowerBody = body.toLowerCase();\n\nif (detail) {\n  return [{json: {status: 'error', detail: typeof detail === 'string' ? detail : JSON.stringify(detail)}}];\n}\nif (lowerBody.includes('error') || lowerBody.includes('invalid') || lowerBody.includes('expired')) {\n  return [{json: {status: 'error', detail: body}}];\n}\nreturn [{json: {status: 'verified', message: 'Email verified! Registration complete. You can now log in.'}}];"
+      },
+      "id": "parse-verify",
+      "name": "Parse Verify",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        650,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "respond-verify",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        850,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Verify Webhook": {
+      "main": [
+        [
+          {
+            "node": "Call /verify_login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call /verify_login": {
+      "main": [
+        [
+          {
+            "node": "Parse Verify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Verify": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "id": "oE6OicF4tAAauSzn",
+  "active": true
+}

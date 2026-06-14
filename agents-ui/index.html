@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TMLink Agents</title>
+<script src="/config.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;display:flex;flex-direction:column}
+.header{background:#1e293b;padding:1rem 2rem;border-bottom:1px solid #334155;display:flex;align-items:center;gap:1rem}
+.header h1{font-size:1.25rem;color:#38bdf8;font-weight:700}
+.header .badge{background:#0ea5e9;color:#fff;padding:.2rem .7rem;border-radius:999px;font-size:.7rem;font-weight:700;letter-spacing:.05em}
+.conn-status{margin-left:auto;font-size:.8rem;display:flex;align-items:center;gap:.4rem}
+.conn-dot{width:8px;height:8px;border-radius:50%;background:#ef4444;transition:background .3s}
+.conn-dot.ok{background:#10b981}
+.tabs{display:flex;gap:.5rem;padding:1rem 2rem;background:#1e293b;overflow-x:auto}
+.tab{padding:.6rem 1.2rem;border-radius:.5rem;border:none;background:#334155;color:#94a3b8;cursor:pointer;font-weight:500;font-size:.9rem;transition:.2s;white-space:nowrap}
+.tab:hover{background:#475569;color:#e2e8f0}
+.tab.active{background:#0ea5e9;color:#fff}
+.content{flex:1;padding:2rem;max-width:900px;width:100%;margin:0 auto}
+.panel{display:none}
+.panel.active{display:block}
+h2{margin-bottom:.5rem;font-size:1.2rem}
+.subtitle{color:#64748b;font-size:.875rem;margin-bottom:1.5rem}
+.form-group{margin-bottom:1rem}
+.form-group label{display:block;margin-bottom:.4rem;font-size:.875rem;color:#94a3b8;font-weight:500}
+.form-group input,.form-group select{width:100%;padding:.75rem;border-radius:.5rem;border:1px solid #334155;background:#1e293b;color:#e2e8f0;font-size:1rem;transition:border-color .2s}
+.form-group input:focus,.form-group select:focus{outline:none;border-color:#0ea5e9}
+.btn{padding:.7rem 1.4rem;border-radius:.5rem;border:none;font-weight:600;cursor:pointer;font-size:.9rem;transition:.2s;display:inline-flex;align-items:center;gap:.4rem}
+.btn-primary{background:#0ea5e9;color:#fff}
+.btn-primary:hover{background:#0284c7}
+.btn-success{background:#10b981;color:#fff}
+.btn-success:hover{background:#059669}
+.btn-ghost{background:#334155;color:#e2e8f0}
+.btn-ghost:hover{background:#475569}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.alert{margin-top:1rem;padding:.85rem 1rem;border-radius:.5rem;font-size:.875rem;line-height:1.5}
+.alert-info{background:#0c2a4a;border:1px solid #1e4976;color:#7dd3fc}
+.alert-success{background:#052e16;border:1px solid #14532d;color:#86efac}
+.alert-error{background:#2d0a0a;border:1px solid #7f1d1d;color:#fca5a5}
+.alert-warn{background:#2d1f0a;border:1px solid #78350f;color:#fcd34d}
+.upload-area{border:2px dashed #334155;border-radius:.75rem;padding:2rem;text-align:center;cursor:pointer;transition:.2s;margin-bottom:1rem}
+.upload-area:hover,.upload-area.drag-over{border-color:#0ea5e9;background:#0c1a2a}
+.upload-area input[type=file]{display:none}
+.upload-area .icon{font-size:2rem;margin-bottom:.5rem;color:#64748b}
+.upload-area .text{color:#64748b;font-size:.875rem}
+.upload-area .text span{color:#0ea5e9;font-weight:600;cursor:pointer}
+.action-row{display:flex;gap:.75rem;flex-wrap:wrap;margin-top:1rem}
+.voice-container{background:#1e293b;border-radius:1rem;padding:2rem;text-align:center;border:1px solid #334155}
+.voice-btn{width:72px;height:72px;border-radius:50%;border:none;background:#ef4444;color:#fff;font-size:1.8rem;cursor:pointer;transition:.2s;margin:1rem auto;display:flex;align-items:center;justify-content:center}
+.voice-btn:hover{transform:scale(1.07)}
+.voice-btn.recording{background:#b91c1c;animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.7)}50%{box-shadow:0 0 0 18px rgba(239,68,68,0)}}
+.transcript{margin-top:1rem;padding:1rem;background:#0f172a;border-radius:.5rem;min-height:52px;font-size:1rem;border:1px solid #1e293b}
+.transcript-label{font-size:.72rem;color:#475569;margin-bottom:.25rem;text-transform:uppercase;letter-spacing:.05em}
+.text-row{display:flex;gap:.5rem;margin-top:1rem}
+.text-row input{flex:1;padding:.7rem;border-radius:.5rem;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:.9rem}
+.results-table{width:100%;border-collapse:collapse;margin-top:1rem;font-size:.8rem}
+.results-table th,.results-table td{padding:.55rem .75rem;text-align:left;border-bottom:1px solid #1e293b}
+.results-table th{background:#1e293b;color:#94a3b8;font-weight:600;text-transform:uppercase;font-size:.72rem;letter-spacing:.04em}
+.results-table tr:hover td{background:#1e293b}
+.result-voice{background:#0f172a;border:1px solid #334155;border-radius:.5rem;padding:.85rem 1rem;margin-top:.75rem;font-size:.9rem;color:#86efac}
+.info-box{background:#1e293b;border:1px solid #334155;border-radius:.75rem;padding:1rem 1.25rem;margin-bottom:1.5rem;font-size:.85rem;color:#94a3b8;line-height:1.6}
+.info-box strong{color:#e2e8f0}
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid #334155;border-top-color:#0ea5e9;border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.hidden{display:none}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>TMLink Agents</h1>
+  <span class="badge">v2</span>
+  <div class="conn-status">
+    <span class="conn-dot" id="conn-dot"></span>
+    <span id="conn-text">Checking n8n…</span>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" data-panel="register">Register</button>
+  <button class="tab" data-panel="link">Link Records</button>
+  <button class="tab" data-panel="query">Search</button>
+</div>
+
+<div class="content">
+
+  <!-- ─── Register ──────────────────────────────── -->
+  <div id="panel-register" class="panel active">
+    <h2>Register New User</h2>
+    <p class="subtitle">Create a TMLink account. A 6-digit verification code will be sent to your email.</p>
+
+    <div class="form-group">
+      <label>First Name</label>
+      <input type="text" id="reg-firstname" placeholder="e.g. John" autocomplete="given-name">
+    </div>
+    <div class="form-group">
+      <label>Last Name</label>
+      <input type="text" id="reg-lastname" placeholder="e.g. Doe" autocomplete="family-name">
+    </div>
+    <div class="form-group">
+      <label>Email Address</label>
+      <input type="email" id="reg-email" placeholder="john@example.com" autocomplete="email">
+    </div>
+
+    <div class="form-group hidden" id="code-group">
+      <label>Verification Code (from email)</label>
+      <input type="text" id="reg-code" placeholder="6-digit code" maxlength="6" inputmode="numeric">
+    </div>
+
+    <button class="btn btn-primary" id="reg-btn" onclick="registerUser()">Send Verification Code</button>
+    <div id="reg-status"></div>
+  </div>
+
+  <!-- ─── Link Records ──────────────────────────── -->
+  <div id="panel-link" class="panel">
+    <h2>Link Records</h2>
+    <p class="subtitle">Upload a new CSV file or trigger linkage on existing data.</p>
+
+    <div class="info-box">
+      <strong>How it works:</strong> Enter your TMLink email (the one you registered with) and an
+      approver email. Drop a CSV and click <em>Upload &amp; Request Approval</em>. An approval
+      notification is sent to the approver email, and Approve / Reject buttons appear below.
+      Click <em>Approve &amp; Run Linkage</em> to upload and run record linkage automatically.
+    </div>
+
+    <div class="form-group">
+      <label>Your TMLink Email <span style="color:#ef4444">*</span></label>
+      <input type="email" id="link-user-email" placeholder="you@example.com (the email you registered with)"
+             autocomplete="email" oninput="syncApproverDefault()">
+    </div>
+    <div class="form-group">
+      <label>Approver Email <span style="color:#94a3b8;font-weight:400;font-size:.8rem">(who approves the upload — can be the same as yours)</span></label>
+      <input type="email" id="link-approver-email" placeholder="approver@example.com" autocomplete="email">
+    </div>
+
+    <!-- File upload -->
+    <div class="upload-area" id="drop-zone"
+         onclick="document.getElementById('link-file').click()"
+         ondragover="handleDragOver(event)"
+         ondragleave="handleDragLeave(event)"
+         ondrop="handleDrop(event)">
+      <input type="file" id="link-file" accept=".csv" multiple onchange="handleFileSelect(this.files)">
+      <div class="icon">📤</div>
+      <div class="text" id="drop-text">Drop CSV files here or <span>browse</span></div>
+    </div>
+    <div id="file-queue" style="margin-bottom:.75rem"></div>
+
+    <div class="action-row">
+      <button class="btn btn-success" id="upload-btn" onclick="uploadForApproval()" disabled>
+        Upload &amp; Request Approval
+      </button>
+      <button class="btn btn-ghost" onclick="runLinkageOnly()">
+        Run Linkage (existing data)
+      </button>
+    </div>
+
+    <div id="link-status"></div>
+  </div>
+
+  <!-- ─── Search ────────────────────────────────── -->
+  <div id="panel-query" class="panel">
+    <h2>Search Records</h2>
+    <p class="subtitle">Query linked records by voice or text.</p>
+
+    <div class="voice-container">
+      <div class="transcript">
+        <div class="transcript-label">Your query</div>
+        <div id="query-text">Press the microphone or type below…</div>
+      </div>
+      <button class="voice-btn" id="voice-btn" onclick="toggleVoice()" title="Start / stop recording">🎤</button>
+      <div class="text-row">
+        <input type="text" id="text-query" placeholder="e.g. Find John Doe born in London"
+               onkeydown="if(event.key==='Enter')sendTextQuery()">
+        <button class="btn btn-primary" onclick="sendTextQuery()">Search</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:.75rem;margin-top:.75rem;font-size:.85rem;color:#94a3b8">
+        <label for="sim-threshold">Similarity threshold:</label>
+        <input type="range" id="sim-threshold" min="0.1" max="1.0" step="0.05" value="0.5"
+               oninput="document.getElementById('sim-val').textContent=parseFloat(this.value).toFixed(2)"
+               style="flex:1;accent-color:#6366f1">
+        <span id="sim-val" style="min-width:2.5rem;text-align:right;color:#e2e8f0;font-weight:600">0.50</span>
+      </div>
+      <div id="query-response"></div>
+      <div id="query-results"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Config — injected by nginx entrypoint from env vars into /config.js
+// ---------------------------------------------------------------------------
+const CFG     = window.TMLINK_CONFIG || {};
+const N8N_BASE = (CFG.n8nBase || 'http://localhost:5678/webhook').replace(/\/$/, '');
+
+// ---------------------------------------------------------------------------
+// Tab navigation
+// ---------------------------------------------------------------------------
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// n8n connection status check
+// ---------------------------------------------------------------------------
+async function checkConn() {
+  const dot  = document.getElementById('conn-dot');
+  const text = document.getElementById('conn-text');
+  try {
+    await fetch(N8N_BASE + '/query-agent', { method: 'OPTIONS', mode: 'no-cors' });
+    dot.classList.add('ok'); text.textContent = 'n8n connected';
+  } catch {
+    dot.classList.remove('ok'); text.textContent = 'n8n offline';
+  }
+}
+checkConn();
+setInterval(checkConn, 15000);
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function showAlert(id, type, html) {
+  document.getElementById(id).innerHTML = `<div class="alert alert-${type}">${html}</div>`;
+}
+function spinner() { return '<span class="spinner"></span>'; }
+
+// ---------------------------------------------------------------------------
+// Register Agent — Stage 1: register, Stage 2: verify email OTP
+// ---------------------------------------------------------------------------
+let regStage = 'send';
+
+async function registerUser() {
+  const btn   = document.getElementById('reg-btn');
+  const fn    = document.getElementById('reg-firstname').value.trim();
+  const ln    = document.getElementById('reg-lastname').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const code  = document.getElementById('reg-code').value.trim();
+
+  if (!fn || !ln || !email) { showAlert('reg-status', 'error', 'Please fill in all fields.'); return; }
+
+  btn.disabled = true;
+  showAlert('reg-status', 'info', spinner() + ' Sending…');
+
+  try {
+    if (regStage === 'send') {
+      const r = await fetch(`${N8N_BASE}/register-agent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ firstname: fn, lastname: ln, email }),
+      });
+      const d = await r.json();
+      if (d.status === 'code_sent') {
+        regStage = 'verify';
+        document.getElementById('code-group').classList.remove('hidden');
+        btn.textContent = 'Verify Code';
+        showAlert('reg-status', 'info', 'Check your email for the 6-digit verification code.');
+      } else if (d.status === 'already_registered') {
+        showAlert('reg-status', 'warn', d.message + ' <a href="#" onclick="document.querySelector(\'[data-panel=link]\').click();return false;" style="color:#fcd34d;text-decoration:underline;">Go to Link Records →</a>');
+      } else {
+        showAlert('reg-status', 'error', d.detail || d.message || 'Registration failed.');
+      }
+    } else {
+      if (!code) { showAlert('reg-status', 'error', 'Enter the code from your email.'); btn.disabled = false; return; }
+      const r = await fetch(`${N8N_BASE}/register-verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, verify_code: code }),
+      });
+      const d = await r.json();
+      if (d.status === 'verified') {
+        showAlert('reg-status', 'success', 'Registration complete! <a href="#" onclick="document.querySelector(\'[data-panel=link]\').click();return false;" style="color:#6ee7b7;text-decoration:underline;">Go to Link Records →</a>');
+        btn.style.display = 'none';
+      } else {
+        showAlert('reg-status', 'error', d.detail || 'Invalid or expired code.');
+      }
+    }
+  } catch (e) {
+    showAlert('reg-status', 'error', 'Could not reach the agent service. Please wait a moment and try again.');
+  }
+  btn.disabled = false;
+}
+
+// ---------------------------------------------------------------------------
+// Link Agent — file upload with HITL approval
+// ---------------------------------------------------------------------------
+let selectedFile = null;
+let fileQueue = [];
+
+function handleFileSelect(fileList) {
+  if (!fileList || fileList.length === 0) return;
+  fileQueue = Array.from(fileList);
+  selectedFile = fileQueue[0];
+  renderQueue();
+  document.getElementById('upload-btn').disabled = false;
+}
+
+function renderQueue() {
+  const el = document.getElementById('file-queue');
+  if (fileQueue.length === 0) { el.innerHTML = ''; return; }
+  el.innerHTML = fileQueue.map((f, i) =>
+    `<div style="font-size:.8rem;color:${i===0?'#e2e8f0':'#64748b'};padding:.2rem 0">
+      ${i===0?'▶':'○'} ${f.name}
+    </div>`
+  ).join('');
+}
+
+function reencodeToUtf8(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        // Try decoding as UTF-8 first
+        const bytes = new Uint8Array(e.target.result);
+        const decoder = new TextDecoder('utf-8', {fatal: true});
+        decoder.decode(bytes);
+        // Already valid UTF-8 — use original file
+        resolve(file);
+      } catch {
+        // Not valid UTF-8 — re-encode from windows-1252
+        const decoder = new TextDecoder('windows-1252');
+        const text = decoder.decode(new Uint8Array(e.target.result));
+        const utf8Bytes = new TextEncoder().encode(text);
+        const newFile = new File([utf8Bytes], file.name, {type: 'text/csv'});
+        resolve(newFile);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function syncApproverDefault() {
+  const approver = document.getElementById('link-approver-email');
+  if (!approver.dataset.userEdited) {
+    approver.placeholder = document.getElementById('link-user-email').value || 'approver@example.com';
+  }
+}
+document.getElementById('link-approver-email').addEventListener('input', function() {
+  this.dataset.userEdited = this.value ? '1' : '';
+});
+
+async function uploadForApproval(retryFile, retryCount) {
+  const raw = retryFile || selectedFile;
+  if (!raw) return;
+  const attempt = retryCount || 0;
+  const MAX_RETRIES = 1;
+
+  const userEmail    = document.getElementById('link-user-email').value.trim();
+  const approverRaw  = document.getElementById('link-approver-email').value.trim();
+  const approverEmail = approverRaw || userEmail;
+
+  if (!userEmail) {
+    showAlert('link-status', 'error', 'Please enter your TMLink email before uploading.');
+    return;
+  }
+
+  const btn = document.getElementById('upload-btn');
+  btn.disabled = true;
+  if (attempt === 0) showAlert('link-status', 'info', spinner() + ` Preparing "${raw.name}"…`);
+
+  const file = await reencodeToUtf8(raw);
+
+  const form = new FormData();
+  form.append('file', file);
+  form.append('userEmail', userEmail);
+  form.append('approverEmail', approverEmail);
+
+  try {
+    const r = await fetch(`${N8N_BASE}/link-agent`, { method: 'POST', body: form });
+    const d = await r.json();
+    if (d.status === 'authenticating') {
+      if (attempt >= MAX_RETRIES) {
+        document.getElementById('link-status').innerHTML = `
+          <div class="alert alert-warn">
+            Check your email for a 6-digit login code from TMLink and enter it below:
+            <div style="display:flex;gap:.5rem;margin-top:.75rem">
+              <input type="text" id="otp-input" maxlength="6" inputmode="numeric" placeholder="6-digit code"
+                style="padding:.6rem;border-radius:.5rem;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:1.1rem;width:140px;letter-spacing:.2em">
+              <button class="btn btn-primary" onclick="submitOTP('${file.name}')">Submit</button>
+            </div>
+          </div>`;
+        window._pendingFile = file;
+        return;
+      }
+      let secs = 35;
+      const tick = () => {
+        secs--;
+        if (secs <= 0) {
+          showAlert('link-status', 'info', spinner() + ` Retrying… (attempt ${attempt + 2}/${MAX_RETRIES + 1})`);
+          uploadForApproval(file, attempt + 1);
+        } else {
+          showAlert('link-status', 'warn',
+            `TMLink is logging in via OTP email. Retrying automatically in ${secs}s… (attempt ${attempt + 1}/${MAX_RETRIES + 1})`);
+          setTimeout(tick, 1000);
+        }
+      };
+      tick();
+      return;
+    } else if (d.status === 'pending_approval') {
+      window._approveUrl = d.approveUrl;
+      window._rejectUrl  = d.rejectUrl;
+      const remaining = fileQueue.length - 1;
+      document.getElementById('link-status').innerHTML = `
+        <div class="alert alert-info">
+          <strong>${d.fileName}</strong> is ready for review.<br><br>
+          <div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-top:.5rem">
+            <button class="btn btn-success" onclick="sendDecision(true)">✓ Approve &amp; Run Linkage</button>
+            <button class="btn btn-ghost" style="background:#7f1d1d;color:#fca5a5" onclick="sendDecision(false)">✗ Reject</button>
+          </div>
+          ${remaining > 0 ? `<div style="margin-top:.75rem;font-size:.8rem;color:#7dd3fc">${remaining} more file${remaining>1?'s':''} queued after this one.</div>` : ''}
+        </div>`;
+      // Advance queue
+      fileQueue.shift();
+      selectedFile = fileQueue[0] || null;
+      renderQueue();
+      if (fileQueue.length === 0) {
+        document.getElementById('link-file').value = '';
+        document.getElementById('drop-text').innerHTML = 'Drop CSV files here or <span>browse</span>';
+      }
+    } else {
+      showAlert('link-status', 'info', d.message || 'Request received.');
+      selectedFile = null;
+      document.getElementById('link-file').value = '';
+      document.getElementById('drop-text').innerHTML = 'Drop a CSV here or <span>browse</span>';
+    }
+  } catch (e) {
+    showAlert('link-status', 'error', 'Could not reach the Link Agent. Please wait a moment and try again.');
+  }
+  btn.disabled = true; // keep disabled until new file selected
+}
+
+async function runLinkageOnly() {
+  const userEmail = document.getElementById('link-user-email').value.trim();
+  if (!userEmail) {
+    showAlert('link-status', 'error', 'Please enter your TMLink email before running linkage on existing data.');
+    return;
+  }
+
+  showAlert('link-status', 'info', spinner() + ' Triggering linkage on existing data…');
+  try {
+    const r = await fetch(`${N8N_BASE}/link-agent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userEmail, approverEmail: document.getElementById('link-approver-email').value.trim() || userEmail }),
+    });
+    const d = await r.json();
+    if (d.status === 'authenticating') {
+      showAlert('link-status', 'warn', 'TMLink is logging in. Please retry in 30 seconds.');
+    } else if (d.status === 'completed') {
+      showAlert('link-status', 'success', `✓ ${d.message}`);
+    } else {
+      showAlert('link-status', 'info', d.message || 'Linkage triggered.');
+    }
+  } catch (e) {
+    showAlert('link-status', 'error', 'Could not reach the Link Agent. Please wait a moment and try again.');
+  }
+}
+
+async function submitOTP(fileName) {
+  const code = document.getElementById('otp-input').value.trim();
+  if (!code || code.length !== 6) {
+    showAlert('link-status', 'error', 'Please enter the 6-digit code from your email.');
+    return;
+  }
+  showAlert('link-status', 'info', spinner() + ' Verifying code…');
+  try {
+    const r = await fetch(`${N8N_BASE}/submit-otp`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({code})
+    });
+    const d = await r.json();
+    if (d.status === 'authenticated') {
+      showAlert('link-status', 'success', 'Logged in! Re-uploading your file…');
+      setTimeout(() => uploadForApproval(window._pendingFile, 0), 1500);
+      window._pendingFile = null;
+    } else {
+      showAlert('link-status', 'error', d.message || 'Invalid code. Please try again.');
+    }
+  } catch {
+    showAlert('link-status', 'error', 'Could not reach the agent. Try again.');
+  }
+}
+
+async function sendDecision(approved) {
+  const url = approved ? window._approveUrl : window._rejectUrl;
+  if (!url) return;
+  showAlert('link-status', 'info', spinner() + (approved ? ' Approving and running linkage…' : ' Rejecting…'));
+  try {
+    await fetch(url, { mode: 'no-cors' });
+  } catch {}
+  window._approveUrl = null;
+  window._rejectUrl  = null;
+  if (approved) {
+    if (selectedFile) {
+      showAlert('link-status', 'success', 'Approved! Uploading next file…');
+      setTimeout(() => uploadForApproval(selectedFile, 0), 1500);
+    } else {
+      showAlert('link-status', 'info', spinner() + ' File approved — uploading and running linkage…');
+      pollLinkageResult();
+    }
+  } else {
+    if (selectedFile) {
+      showAlert('link-status', 'warn', 'Rejected. Moving to next file…');
+      setTimeout(() => uploadForApproval(selectedFile, 0), 1500);
+    } else {
+      showAlert('link-status', 'warn', 'Rejected. No data was uploaded.');
+    }
+  }
+}
+
+async function pollLinkageResult() {
+  const MAX_POLLS = 60; // 5 minutes at 5s intervals
+  let lastMessage = 'Linkage is still processing.';
+
+  for (let i = 0; i < MAX_POLLS; i++) {
+    await new Promise(r => setTimeout(r, 5000));
+    try {
+      const r = await fetch('/n8n/webhook/linkage-status', { cache: 'no-store' });
+      if (!r.ok) continue;
+      const d = await r.json();
+      lastMessage = d.message || d.detail || JSON.stringify(d);
+
+      if (['linkage_done', 'completed', 'done', 'authenticated'].includes(d.status)) {
+        showAlert('link-status', 'success', '✓ Linkage complete: ' + lastMessage);
+        return;
+      }
+      if (['linkage_error', 'error', 'failed'].includes(d.status)) {
+        showAlert('link-status', 'error', 'Linkage error: ' + lastMessage);
+        return;
+      }
+    } catch {}
+  }
+
+  showAlert('link-status', 'warn', 'Linkage is still running or waiting for a final status. Last status: ' + lastMessage + '. Check the n8n dashboard for details.');
+}
+
+// Drag-and-drop
+function handleDragOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('drag-over'); }
+function handleDragLeave()  { document.getElementById('drop-zone').classList.remove('drag-over'); }
+function handleDrop(e)      { e.preventDefault(); document.getElementById('drop-zone').classList.remove('drag-over'); handleFileSelect(e.dataTransfer.files); }
+
+// ---------------------------------------------------------------------------
+// Query / Voice Agent
+// ---------------------------------------------------------------------------
+let recognition = null;
+let isRecording  = false;
+let queryPending = false;
+
+function toggleVoice() { isRecording ? stopRecording() : startRecording(); }
+
+function startRecording() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { alert('Voice input requires Chrome or Edge.'); return; }
+  recognition = new SR();
+  recognition.continuous     = false;
+  recognition.interimResults = false;
+  recognition.lang           = 'en-US';
+  recognition.onstart  = () => { isRecording = true; document.getElementById('voice-btn').classList.add('recording'); document.getElementById('query-text').textContent = 'Listening…'; };
+  recognition.onend    = () => { isRecording = false; document.getElementById('voice-btn').classList.remove('recording'); };
+  recognition.onresult = (e) => { const t = e.results[0][0].transcript; document.getElementById('query-text').textContent = t; sendQuery(t); };
+  recognition.onerror  = (e) => {
+    isRecording = false;
+    document.getElementById('voice-btn').classList.remove('recording');
+    if (e.error === 'not-allowed') {
+      showAlert('query-response', 'info', 'Microphone access was denied. Use the text box below to search.');
+      document.getElementById('text-query').focus();
+    } else {
+      showAlert('query-response', 'error', `Microphone error: ${e.error}`);
+    }
+  };
+  recognition.start();
+}
+
+function stopRecording() { recognition && recognition.stop(); }
+
+function sendTextQuery() {
+  const t = document.getElementById('text-query').value.trim();
+  if (!t) return;
+  document.getElementById('query-text').textContent = t;
+  sendQuery(t);
+}
+
+async function sendQuery(query, retryCount = 0) {
+  if (queryPending) return;
+  queryPending = true;
+  const respDiv    = document.getElementById('query-response');
+  const resultsDiv = document.getElementById('query-results');
+  respDiv.innerHTML = `<div class="alert alert-info">${spinner()} Searching…</div>`;
+  if (retryCount === 0) resultsDiv.innerHTML = '';
+
+  try {
+    const r = await fetch(`${N8N_BASE}/query-agent`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ query, similarity_threshold: parseFloat(document.getElementById('sim-threshold')?.value || 0.5) }),
+    });
+    const d = await r.json();
+    queryPending = false;
+
+    if (d.status === 'authenticating') {
+      if (retryCount < 3) {
+        respDiv.innerHTML = `<div class="alert alert-info">${spinner()} Logging in to TMLink… retrying in 15 s (attempt ${retryCount + 1}/3).</div>`;
+        setTimeout(() => sendQuery(query, retryCount + 1), 15000);
+        return;
+      }
+      showAlert('query-response', 'error', 'Authentication timed out. Try again in 30 s.');
+      return;
+    }
+
+    if (d.voice_response) {
+      respDiv.innerHTML = `<div class="result-voice">${d.voice_response}</div>`;
+    } else if (!d.results || d.results.length === 0) {
+      respDiv.innerHTML = '<div class="alert alert-info">No matching records found.</div>';
+    } else {
+      respDiv.innerHTML = '';
+    }
+
+    if (d.results && d.results.length > 0) renderResults(d.results);
+  } catch (e) {
+    queryPending = false;
+    showAlert('query-response', 'error', 'Search could not complete. Please wait a moment and try again.');
+  }
+}
+
+function renderResults(records) {
+  if (!records.length) return;
+  const cols = Object.keys(records[0]).filter(c => !c.startsWith('_'));
+  let html = '<table class="results-table"><thead><tr>';
+  cols.forEach(c => { html += `<th>${c.replace(/_/g, ' ')}</th>`; });
+  html += '</tr></thead><tbody>';
+  records.forEach(row => {
+    html += '<tr>';
+    cols.forEach(c => { html += `<td>${row[c] ?? ''}</td>`; });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  document.getElementById('query-results').innerHTML = `<div style="overflow-x:auto">${html}</div>`;
+}
+
+function speak(text) {
+  const synth = window.speechSynthesis;
+  if (!synth) return;
+  synth.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 1.05;
+  synth.speak(u);
+}
+</script>
+</body>
+</html>

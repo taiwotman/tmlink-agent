@@ -150,12 +150,8 @@ make restart
 
 ### Advanced Search (AI-powered)
 
-The **`/ask`** endpoint accepts natural language questions and uses the Vanna AI engine to generate SQL. To enable it:
+The **`/ask`** endpoint accepts natural language questions and uses the Vanna AI engine to generate SQL. To enable it: query agent can be updated to call `/ask` instead of `/search_records`
 
-1. Add `VANNA_API_KEY` and `VANNA_MODEL` to your `.env`
-2. The query agent can be updated to call `/ask` instead of `/search_records`
-
-Without a Vanna API key, only basic search is available.
 
 ### Enter OTP manually (no IMAP)
 

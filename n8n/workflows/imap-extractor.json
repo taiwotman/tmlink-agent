@@ -1,0 +1,311 @@
+{
+  "name": "TMLink IMAP Code Extractor",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "seconds",
+              "secondsInterval": 30
+            }
+          ]
+        }
+      },
+      "id": "imap-sched",
+      "name": "Poll Every 30s",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://auth-store:8080/auth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "check-status",
+      "name": "Check Auth Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-1",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "waiting",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "is-waiting",
+      "name": "Waiting for Code?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        650,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mailbox": "INBOX",
+        "search": {
+          "unseen": true
+        },
+        "options": {
+          "downloadAttachments": false
+        },
+        "format": "simple"
+      },
+      "name": "Read Gmail (IMAP)",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2,
+      "position": [
+        850,
+        300
+      ],
+      "credentials": {
+        "imap": {
+          "id": "hLFm6CS4h4tki0ru",
+          "name": "Gmail IMAP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// format:simple uses 'text' and 'html', format:resolved uses 'textPlain' and 'textHtml'\nconst body = $json.text || $json.textPlain || $json.html || $json.textHtml || '';\nconst clean = body.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ');\nconst match = clean.match(/\\d{6}/);\nif (!match) return [];\nreturn [{json: {code: match[0], messageId: $json.messageId}}];"
+      },
+      "id": "extract-code",
+      "name": "Extract 6-Digit Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1050,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://auth-store:8080/auth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "read-auth",
+      "name": "Read Auth State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://tmlink-official:8000/recordlinkage/auth/api/verify_login",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "email",
+              "value": "={{ $('Read Auth State').item.json.email }}"
+            },
+            {
+              "name": "code",
+              "value": "={{ $('Extract 6-Digit Code').item.json.code }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "verify-login",
+      "name": "Verify Login",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const headers = $json.headers || {};\nconst setCookie = headers['set-cookie'] || headers['Set-Cookie'] || [];\nconst cookieArr = Array.isArray(setCookie) ? setCookie : [setCookie];\nconst rawCookie = cookieArr[0] || '';\nconst sessionCookie = rawCookie.split(';')[0].trim();\nif (!sessionCookie) throw new Error('No session cookie in verify_login response');\nreturn [{json: {cookie: sessionCookie}}];"
+      },
+      "id": "extract-cookie",
+      "name": "Extract Cookie",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1650,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://auth-store:8080/auth",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "cookie",
+              "value": "={{ $json.cookie }}"
+            },
+            {
+              "name": "status",
+              "value": "=authenticated"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "store-cookie",
+      "name": "Store Cookie",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1850,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Poll Every 30s": {
+      "main": [
+        [
+          {
+            "node": "Check Auth Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Auth Status": {
+      "main": [
+        [
+          {
+            "node": "Waiting for Code?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Waiting for Code?": {
+      "main": [
+        [
+          {
+            "node": "Read Gmail (IMAP)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Read Gmail (IMAP)": {
+      "main": [
+        [
+          {
+            "node": "Extract 6-Digit Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract 6-Digit Code": {
+      "main": [
+        [
+          {
+            "node": "Read Auth State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Auth State": {
+      "main": [
+        [
+          {
+            "node": "Verify Login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Login": {
+      "main": [
+        [
+          {
+            "node": "Extract Cookie",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Cookie": {
+      "main": [
+        [
+          {
+            "node": "Store Cookie",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "id": "7hRyMaD1GnCmukvf",
+  "active": false
+}

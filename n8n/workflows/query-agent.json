@@ -1,0 +1,157 @@
+{
+  "name": "TMLink Query Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "query-agent",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Query Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "query-agent"
+    },
+    {
+      "parameters": {
+        "workflowId": "tmlink-auth-subworkflow",
+        "options": {}
+      },
+      "name": "Get Auth",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-1",
+              "leftValue": "={{ $json.authenticated }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "name": "Authenticated?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://tmlink-official:8000/recordlinkage/api/search_records",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "first_name",
+              "value": "={{ (() => { const q = $('Query Webhook').item.json.body.query || ''; const stop = new Set(['find','search','look','for','me','records','with','name','a','an','the','born','in','on','and','show','get','all','where']); const tokens = q.toLowerCase().split(/[^a-z]+/).filter(t => t.length > 1 && !stop.has(t)); return tokens[0] ? tokens[0].charAt(0).toUpperCase() + tokens[0].slice(1) : ''; })() }}"
+            },
+            {
+              "name": "last_name",
+              "value": "={{ (() => { const q = $('Query Webhook').item.json.body.query || ''; const stop = new Set(['find','search','look','for','me','records','with','name','a','an','the','born','in','on','and','show','get','all','where']); const tokens = q.toLowerCase().split(/[^a-z]+/).filter(t => t.length > 1 && !stop.has(t)); return tokens[1] ? tokens[1].charAt(0).toUpperCase() + tokens[1].slice(1) : ''; })() }}"
+            },
+            {
+              "name": "similarity_threshold",
+              "value": "={{ $('Query Webhook').item.json.body.similarity_threshold ?? 0.5 }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "={{ $('Get Auth').item.json.cookie }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "name": "Search Records",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "continueOnFail": true,
+      "position": [850, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// /search_records returns {generated_sql_query, output} where output is a JSON string array of rows\n// or {detail: 'Please provide at least one search name.'}\nconst body = $json.body || $json;\nconst query = $('Query Webhook').item.json.body.query || '';\n\n// Handle error case\nif (body.detail) {\n  return [{ json: { results: [], count: 0, voice_response: 'Please provide a name to search for.', query } }];\n}\n\n// Parse output - it's a JSON string of row objects\nlet rows = [];\ntry {\n  const raw = body.output;\n  rows = typeof raw === 'string' ? JSON.parse(raw) : (Array.isArray(raw) ? raw : []);\n} catch(e) { rows = []; }\n\nconst count = rows.length;\nlet speak = count === 0\n  ? 'I found no matching records.'\n  : `I found ${count} result${count === 1 ? '' : 's'}.`;\n\nrows.slice(0, 5).forEach((r, i) => {\n  const fn = r.first_name || r.firstname || '';\n  const ln = r.last_name || r.lastname || '';\n  const name = [fn, ln].filter(Boolean).join(' ') || r.record_text || 'Unknown';\n  speak += ` Record ${i + 1}: ${name}.`;\n});\n\nreturn [{ json: { results: rows, count, voice_response: speak, query } }];"
+      },
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json: {status: 'authenticating', message: 'Logging into TMLink. Please retry your search in 30 seconds.'}}];"
+      },
+      "name": "Auth In Progress",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 400]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1250, 300]
+    }
+  ],
+  "connections": {
+    "Query Webhook": {
+      "main": [[{"node": "Get Auth", "type": "main", "index": 0}]]
+    },
+    "Get Auth": {
+      "main": [[{"node": "Authenticated?", "type": "main", "index": 0}]]
+    },
+    "Authenticated?": {
+      "main": [
+        [{"node": "Search Records", "type": "main", "index": 0}],
+        [{"node": "Auth In Progress", "type": "main", "index": 0}]
+      ]
+    },
+    "Search Records": {
+      "main": [[{"node": "Format Response", "type": "main", "index": 0}]]
+    },
+    "Format Response": {
+      "main": [[{"node": "Respond to Webhook", "type": "main", "index": 0}]]
+    },
+    "Auth In Progress": {
+      "main": [[{"node": "Respond to Webhook", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "id": "2z1FrDtmxQGwLVCq",
+  "active": true
+}
