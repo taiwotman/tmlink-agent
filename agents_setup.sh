@@ -52,8 +52,7 @@ done < .env
 ok
 
 # Validate required vars
-for var in N8N_BASIC_AUTH_USER N8N_BASIC_AUTH_PASSWORD \
-           TMLINK_EMAIL GMAIL_APP_PASSWORD; do
+for var in TMLINK_EMAIL GMAIL_APP_PASSWORD; do
     if [ -z "${!var:-}" ]; then
         fail "Required variable $var is not set in .env"
     fi
@@ -156,7 +155,7 @@ AGENTS_PORT="${PORT_AGENTS_UI:-3001}"
 N8N_PORT="${PORT_N8N:-5678}"
 TMLINK_PORT="${PORT_TMLINK_UI:-8501}"
 echo "  TMLink UI:    http://localhost:${TMLINK_PORT}"
-echo "  n8n Editor:   http://localhost:${N8N_PORT}  (${N8N_BASIC_AUTH_USER:-admin} / ${N8N_BASIC_AUTH_PASSWORD:-change-me})"
+echo "  n8n Editor:   http://localhost:${N8N_PORT}"
 echo "  Agents UI:    http://localhost:${AGENTS_PORT}"
 echo ""
 echo "Next steps:"

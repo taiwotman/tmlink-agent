@@ -36,16 +36,18 @@ cp .env.example .env
 Edit `.env` and fill in your values:
 
 ```env
-# ── n8n login ────────────────────────────────────────────────
-N8N_BASIC_AUTH_USER=admin
-N8N_BASIC_AUTH_PASSWORD=YourSecurePassword
+# ── n8n Editor Login ─────────────────────────────────────────
+# Credentials to use when completing the one-time n8n setup wizard
+# at http://localhost:5678.
+N8N_USER_EMAIL=you@mail.com
+N8N_USER_PASSWORD=change-me
 
 # ── Your email (used to log in to TMLink) ────────────────────
 TMLINK_EMAIL=you@gmail.com
 APPROVER_EMAIL=you@gmail.com
 SMTP_FROM=you@gmail.com
 
-# ── Gmail App Password (required for TMLink OTP emails) ──────
+# ── E-mail App Password (required for TMLink OTP emails) ──────
 # Generate at: myaccount.google.com → Security → App Passwords
 GMAIL_APP_PASSWORD=your-app-password
 
@@ -104,7 +106,7 @@ make reset      # full wipe + re-setup (WARNING: deletes all data and re-runs se
 | **TMLink API** | 3001/tmlink-api | via nginx proxy | http://localhost:3001/tmlink-api |
 | **n8n Editor** | 5678 | `PORT_N8N` | http://localhost:5678 |
 
-**n8n login:** credentials from your `.env` (`N8N_BASIC_AUTH_USER` / `N8N_BASIC_AUTH_PASSWORD`)
+**n8n login:** complete the one-time owner account setup wizard in the browser after first startup.
 
 ### Changing ports
 
