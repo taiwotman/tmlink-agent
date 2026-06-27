@@ -75,7 +75,6 @@ services:
       - N8N_TEMPLATES_ENABLED=false
       - N8N_RUNNERS_ENABLED=false
       - N8N_DEFAULT_BINARY_DATA_MODE=default
-      - NODE_FUNCTION_ALLOW_BUILTIN=http,https,url
       # Variables used by n8n agent workflows ($env.VARNAME)
       - TMLINK_API_URL=${TMLINK_API_URL:-http://tmlink-official:8000}
       - APPROVER_EMAIL=${APPROVER_EMAIL}
