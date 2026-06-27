@@ -24,7 +24,7 @@ An automated record linkage system built on the **official `taiwotman/tmlink` Do
 ### 1. Enter the project directory
 
 ```bash
-cd tmlink   # where docker-compose.official.yml lives
+cd tmlink-agent   # where docker-compose.official.yml lives
 ```
 
 ### 2. Create your `.env` file

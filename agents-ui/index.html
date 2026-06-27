@@ -405,18 +405,28 @@ async function uploadForApproval(retryFile, retryCount) {
       tick();
       return;
     } else if (d.status === 'pending_approval') {
-      window._approveUrl = d.approveUrl;
-      window._rejectUrl  = d.rejectUrl;
       const remaining = fileQueue.length - 1;
-      document.getElementById('link-status').innerHTML = `
-        <div class="alert alert-info">
-          <strong>${d.fileName}</strong> is ready for review.<br><br>
-          <div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-top:.5rem">
-            <button class="btn btn-success" onclick="sendDecision(true)">✓ Approve &amp; Run Linkage</button>
-            <button class="btn btn-ghost" style="background:#7f1d1d;color:#fca5a5" onclick="sendDecision(false)">✗ Reject</button>
-          </div>
-          ${remaining > 0 ? `<div style="margin-top:.75rem;font-size:.8rem;color:#7dd3fc">${remaining} more file${remaining>1?'s':''} queued after this one.</div>` : ''}
-        </div>`;
+      if (d.awaitingApprover) {
+        document.getElementById('link-status').innerHTML = `
+          <div class="alert alert-info">
+            <strong>${d.fileName}</strong> is awaiting approval.<br>
+            An approval email with a unique token has been sent to <strong>${d.approverEmail || 'the approver'}</strong>. Waiting for their decision…
+            ${remaining > 0 ? `<div style="margin-top:.75rem;font-size:.8rem;color:#7dd3fc">${remaining} more file${remaining>1?'s':''} queued after this one.</div>` : ''}
+          </div>`;
+        pollLinkageResult();
+      } else {
+        window._approveUrl = d.approveUrl;
+        window._rejectUrl  = d.rejectUrl;
+        document.getElementById('link-status').innerHTML = `
+          <div class="alert alert-info">
+            <strong>${d.fileName}</strong> is ready for review.<br><br>
+            <div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-top:.5rem">
+              <button class="btn btn-success" onclick="sendDecision(true)">✓ Approve &amp; Run Linkage</button>
+              <button class="btn btn-ghost" style="background:#7f1d1d;color:#fca5a5" onclick="sendDecision(false)">✗ Reject</button>
+            </div>
+            ${remaining > 0 ? `<div style="margin-top:.75rem;font-size:.8rem;color:#7dd3fc">${remaining} more file${remaining>1?'s':''} queued after this one.</div>` : ''}
+          </div>`;
+      }
       // Advance queue
       fileQueue.shift();
       selectedFile = fileQueue[0] || null;
