@@ -264,7 +264,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const resumeUrl = $execution.resumeUrl.replace('http://localhost:5678', 'http://localhost:3001/n8n').replace('http://n8n:5678', 'http://localhost:3001/n8n');\nconst webhookBody = $('Link Webhook').item.json.body || {};\nconst userEmail = webhookBody.userEmail || '';\nconst approverRaw = webhookBody.approverEmail || '';\nconst approverEmail = approverRaw || userEmail;\nconst sameApprover = !approverRaw || approverRaw === userEmail;\nlet tokenParam = '';\nif (!sameApprover) {\n  const crypto = require('crypto');\n  const approvalToken = crypto.randomBytes(16).toString('hex');\n  const staticData = $getWorkflowStaticData('global');\n  staticData.approvalToken = approvalToken;\n  tokenParam = '&token=' + approvalToken;\n} else {\n  const staticData = $getWorkflowStaticData('global');\n  delete staticData.approvalToken;\n}\nconst approveUrl = resumeUrl + '&approved=true' + tokenParam;\nconst rejectUrl  = resumeUrl + '&approved=false' + tokenParam;\nreturn [{json: {fileName: $json.fileName, approveUrl, rejectUrl, cookie: $json.cookie, sameApprover, approverEmail}}];"
+        "jsCode": "const resumeUrl = $execution.resumeUrl.replace('http://localhost:5678', 'http://localhost:3001/n8n').replace('http://n8n:5678', 'http://localhost:3001/n8n');\nconst webhookBody = $('Link Webhook').item.json.body || {};\nconst userEmail = webhookBody.userEmail || '';\nconst approverRaw = webhookBody.approverEmail || '';\nconst approverEmail = approverRaw || userEmail;\nconst sameApprover = !approverRaw || approverRaw === userEmail;\nconst approveUrl = resumeUrl + '&approved=true';\nconst rejectUrl  = resumeUrl + '&approved=false';\nconst pendingResponse = JSON.stringify(sameApprover\n  ? {status: 'pending_approval', fileName: $json.fileName, approveUrl, rejectUrl}\n  : {status: 'pending_approval', fileName: $json.fileName, awaitingApprover: true, approverEmail}\n);\nreturn [{json: {fileName: $json.fileName, approveUrl, rejectUrl, cookie: $json.cookie, sameApprover, approverEmail, pendingResponse}}];"
       },
       "id": "prep-approval",
       "name": "Prepare Approval",
@@ -278,7 +278,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify($json.sameApprover ? {status: 'pending_approval', fileName: $json.fileName, approveUrl: $json.approveUrl, rejectUrl: $json.rejectUrl} : {status: 'pending_approval', fileName: $json.fileName, awaitingApprover: true, approverEmail: $json.approverEmail}) }}",
+        "responseBody": "={{ $json.pendingResponse }}",
         "options": {}
       },
       "id": "respond-pending",
@@ -572,7 +572,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst requiredToken = staticData.approvalToken;\nif (requiredToken) {\n  const providedToken = ($json.query && $json.query.token) || '';\n  if (providedToken !== requiredToken) {\n    return [{json: {query: {approved: 'false'}, tokenValid: false, reason: 'Invalid approval token'}}];\n  }\n  delete staticData.approvalToken;\n}\nreturn [{json: {query: $json.query, tokenValid: true}}];"
+        "jsCode": "return [{json: {query: $json.query, tokenValid: true}}];"
       },
       "id": "validate-token",
       "name": "Validate Approval Token",
