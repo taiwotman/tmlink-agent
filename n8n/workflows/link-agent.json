@@ -264,7 +264,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const resumeUrl = $execution.resumeUrl.replace('http://localhost:5678', 'http://localhost:3001/n8n').replace('http://n8n:5678', 'http://localhost:3001/n8n');\nconst webhookBody = $('Link Webhook').item.json.body || {};\nconst userEmail = webhookBody.userEmail || '';\nconst approverRaw = webhookBody.approverEmail || '';\nconst approverEmail = approverRaw || userEmail;\nconst sameApprover = !approverRaw || approverRaw === userEmail;\nconst approveUrl = resumeUrl + '&approved=true';\nconst rejectUrl  = resumeUrl + '&approved=false';\nconst pendingResponse = JSON.stringify(sameApprover\n  ? {status: 'pending_approval', fileName: $json.fileName, approveUrl, rejectUrl}\n  : {status: 'pending_approval', fileName: $json.fileName, awaitingApprover: true, approverEmail}\n);\nreturn [{json: {fileName: $json.fileName, approveUrl, rejectUrl, cookie: $json.cookie, sameApprover, approverEmail, pendingResponse}}];"
+        "jsCode": "const resumeUrl = $execution.resumeUrl.replace('http://localhost:5678', 'http://localhost:3001/n8n').replace('http://n8n:5678', 'http://localhost:3001/n8n');\nconst webhookBody = $('Link Webhook').item.json.body || {};\nconst userEmail = webhookBody.userEmail || '';\nconst approverRaw = webhookBody.approverEmail || '';\nconst approverEmail = approverRaw || userEmail;\nconst sameApprover = !approverRaw || approverRaw === userEmail;\nconst approvalToken = sameApprover ? '' : Math.floor(100000 + Math.random() * 900000).toString();\nconst tokenParam = approvalToken ? '&atoken=' + approvalToken : '';\nconst approveUrl = resumeUrl + '&approved=true' + tokenParam;\nconst rejectUrl  = resumeUrl + '&approved=false' + tokenParam;\n\nconst http = require('http');\nconst body = JSON.stringify({approvalToken});\nawait new Promise((resolve, reject) => {\n  const req = http.request({\n    hostname: 'auth-store',\n    port: 8080,\n    path: '/auth',\n    method: 'POST',\n    headers: {'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body)}\n  }, res => { res.resume(); res.on('end', resolve); });\n  req.on('error', reject);\n  req.write(body);\n  req.end();\n});\n\nconst pendingResponse = JSON.stringify(sameApprover\n  ? {status: 'pending_approval', fileName: $json.fileName, approveUrl, rejectUrl}\n  : {status: 'pending_approval', fileName: $json.fileName, awaitingApprover: true, approverEmail}\n);\n\nreturn [{json: {fileName: $json.fileName, approveUrl, rejectUrl, cookie: $json.cookie, sameApprover, approverEmail, approvalToken, pendingResponse}}];"
       },
       "id": "prep-approval",
       "name": "Prepare Approval",
@@ -327,7 +327,7 @@
           "conditions": [
             {
               "id": "is-approved",
-              "leftValue": "={{ $json.query.approved }}",
+              "leftValue": "={{ $('Wait for Decision').item.json.query.approved }}",
               "rightValue": "true",
               "operator": {
                 "type": "string",
@@ -558,7 +558,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const tls = require('node:tls');\nconst host = 'smtp.gmail.com';\nconst port = 465;\nconst user = $env.SMTP_FROM || '';\nconst pass = $env.GMAIL_APP_PASSWORD || '';\nconst webhookBody = $('Link Webhook').item.json.body || {};\nconst to = webhookBody.approverEmail || webhookBody.userEmail || $env.APPROVER_EMAIL || '';\nif (!user || !pass || !to) return [{json: {emailSent: false, reason: 'SMTP not configured or no approver email provided'}}];\n\nconst fileName  = $json.fileName  || 'unknown';\nconst approveUrl = $json.approveUrl || '';\nconst rejectUrl  = $json.rejectUrl  || '';\nconst subject = `[TMLink Approval Needed] ${fileName}`;\nconst body = [\n  'A file has been uploaded to TMLink and is awaiting your approval.',\n  '',\n  'File: ' + fileName,\n  '',\n  'Open one of these links in your browser (must be on the same machine as TMLink):',\n  '',\n  'APPROVE: ' + approveUrl,\n  'REJECT:  ' + rejectUrl,\n  '',\n  '-- TMLink Agent'\n].join('\\r\\n');\n\nconst msg = [\n  'From: TMLink <' + user + '>',\n  'To: ' + to,\n  'Subject: ' + subject,\n  'Date: ' + new Date().toUTCString(),\n  'MIME-Version: 1.0',\n  'Content-Type: text/plain; charset=UTF-8',\n  '',\n  body\n].join('\\r\\n');\n\nawait new Promise((resolve, reject) => {\n  const socket = tls.connect({ host, port, servername: host }, () => {\n    let buf = '';\n    let step = 0;\n    socket.on('data', chunk => {\n      buf += chunk.toString();\n      const lines = buf.split('\\r\\n');\n      buf = lines.pop();\n      for (const line of lines) {\n        if (!line) continue;\n        const code = parseInt(line.slice(0, 3), 10);\n        const last = line[3] !== '-';\n        if (!last) continue;\n        if (code >= 400) { socket.destroy(); reject(new Error('SMTP: ' + line)); return; }\n        switch (step) {\n          case 0: if (code === 220) { socket.write('EHLO localhost\\r\\n'); step++; } break;\n          case 1: if (code === 250) { socket.write('AUTH LOGIN\\r\\n'); step++; } break;\n          case 2: if (code === 334) { socket.write(Buffer.from(user).toString('base64') + '\\r\\n'); step++; } break;\n          case 3: if (code === 334) { socket.write(Buffer.from(pass).toString('base64') + '\\r\\n'); step++; } break;\n          case 4: if (code === 235) { socket.write('MAIL FROM:<' + user + '>\\r\\n'); step++; } break;\n          case 5: if (code === 250) { socket.write('RCPT TO:<' + to + '>\\r\\n'); step++; } break;\n          case 6: if (code === 250) { socket.write('DATA\\r\\n'); step++; } break;\n          case 7: if (code === 354) { socket.write(msg + '\\r\\n.\\r\\n'); step++; } break;\n          case 8: if (code === 250) { socket.write('QUIT\\r\\n'); step++; } break;\n          case 9: if (code === 221) { socket.end(); resolve(); } break;\n        }\n      }\n    });\n    socket.on('error', reject);\n  });\n  socket.on('error', reject);\n});\n\nreturn [{json: {emailSent: true, to, subject}}];"
+        "jsCode": "const tls = require('node:tls');\nconst host = 'smtp.gmail.com';\nconst port = 465;\nconst user = $env.SMTP_FROM || '';\nconst pass = $env.GMAIL_APP_PASSWORD || '';\nconst webhookBody = $('Link Webhook').item.json.body || {};\nconst to = webhookBody.approverEmail || webhookBody.userEmail || $env.APPROVER_EMAIL || '';\nif (!user || !pass || !to) return [{json: {emailSent: false, reason: 'SMTP not configured or no approver email provided'}}];\n\nconst fileName  = $json.fileName  || 'unknown';\nconst approveUrl = $json.approveUrl || '';\nconst rejectUrl  = $json.rejectUrl  || '';\nconst approvalToken = $json.approvalToken || '';\nconst subject = `[TMLink Approval Needed] ${fileName}`;\nconst tokenLines = approvalToken\n  ? ['', 'APPROVAL CODE: ' + approvalToken, '(Your code is automatically verified when you click the link below)', '']\n  : [];\nconst body = [\n  'A file has been uploaded to TMLink and is awaiting your approval.',\n  '',\n  'File: ' + fileName,\n].concat(tokenLines).concat([\n  'Click one of these links in your browser (must be on the same machine as TMLink):',\n  '',\n  'APPROVE: ' + approveUrl,\n  'REJECT:  ' + rejectUrl,\n  '',\n  '-- TMLink Agent'\n]).join('\\r\\n');\n\nconst msg = [\n  'From: TMLink <' + user + '>',\n  'To: ' + to,\n  'Subject: ' + subject,\n  'Date: ' + new Date().toUTCString(),\n  'MIME-Version: 1.0',\n  'Content-Type: text/plain; charset=UTF-8',\n  '',\n  body\n].join('\\r\\n');\n\nawait new Promise((resolve, reject) => {\n  const socket = tls.connect({ host, port, servername: host }, () => {\n    let buf = '';\n    let step = 0;\n    socket.on('data', chunk => {\n      buf += chunk.toString();\n      const lines = buf.split('\\r\\n');\n      buf = lines.pop();\n      for (const line of lines) {\n        if (!line) continue;\n        const code = parseInt(line.slice(0, 3), 10);\n        const last = line[3] !== '-';\n        if (!last) continue;\n        if (code >= 400) { socket.destroy(); reject(new Error('SMTP: ' + line)); return; }\n        switch (step) {\n          case 0: if (code === 220) { socket.write('EHLO localhost\\r\\n'); step++; } break;\n          case 1: if (code === 250) { socket.write('AUTH LOGIN\\r\\n'); step++; } break;\n          case 2: if (code === 334) { socket.write(Buffer.from(user).toString('base64') + '\\r\\n'); step++; } break;\n          case 3: if (code === 334) { socket.write(Buffer.from(pass).toString('base64') + '\\r\\n'); step++; } break;\n          case 4: if (code === 235) { socket.write('MAIL FROM:<' + user + '>\\r\\n'); step++; } break;\n          case 5: if (code === 250) { socket.write('RCPT TO:<' + to + '>\\r\\n'); step++; } break;\n          case 6: if (code === 250) { socket.write('DATA\\r\\n'); step++; } break;\n          case 7: if (code === 354) { socket.write(msg + '\\r\\n.\\r\\n'); step++; } break;\n          case 8: if (code === 250) { socket.write('QUIT\\r\\n'); step++; } break;\n          case 9: if (code === 221) { socket.end(); resolve(); } break;\n        }\n      }\n    });\n    socket.on('error', reject);\n  });\n  socket.on('error', reject);\n});\n\nreturn [{json: {emailSent: true, to, subject}}];"
       },
       "id": "send-approval-email",
       "name": "Send Approval Email",
@@ -572,15 +572,90 @@
     },
     {
       "parameters": {
-        "jsCode": "return [{json: {query: $json.query, tokenValid: true}}];"
+        "method": "GET",
+        "url": "http://auth-store:8080/auth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
       },
       "id": "validate-token",
-      "name": "Validate Approval Token",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "name": "Fetch Stored Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "continueOnFail": true,
       "position": [
         1690,
         460
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "no-token",
+              "leftValue": "={{ $json.approvalToken || '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "token-match",
+              "leftValue": "={{ $json.approvalToken || '' }}",
+              "rightValue": "={{ $('Wait for Decision').item.json.query.atoken || '' }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        }
+      },
+      "id": "token-valid",
+      "name": "Token Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1900,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://auth-store:8080/auth",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "approvalToken",
+              "value": "={{ $json.approvalToken }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "store-approval-token",
+      "name": "Store Approval Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "continueOnFail": true,
+      "position": [
+        1360,
+        560
       ]
     },
     {
@@ -793,12 +868,17 @@
             "index": 0
           },
           {
-            "node": "Wait for Decision",
+            "node": "Store Approval Token",
             "type": "main",
             "index": 0
           },
           {
             "node": "Send Approval Email",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Wait for Decision",
             "type": "main",
             "index": 0
           }
@@ -809,18 +889,36 @@
       "main": [
         [
           {
-            "node": "Validate Approval Token",
+            "node": "Fetch Stored Token",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Validate Approval Token": {
+    "Fetch Stored Token": {
+      "main": [
+        [
+          {
+            "node": "Token Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Token Valid?": {
       "main": [
         [
           {
             "node": "Approved?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Rejection",
             "type": "main",
             "index": 0
           }

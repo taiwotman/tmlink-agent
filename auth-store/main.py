@@ -35,6 +35,7 @@ _DEFAULT_STATE: dict = {
     "last_login_attempt": None,
     "login_attempt_count": 0,
     "login_blocked": "no",
+    "approvalToken": "",
 }
 
 
@@ -69,6 +70,7 @@ class AuthUpdate(BaseModel):
     status: str | None = None
     linkage_message: str | None = None
     trigger_login: bool = False
+    approvalToken: str | None = None
 
 
 @app.get("/auth")
@@ -90,6 +92,8 @@ def set_auth(update: AuthUpdate) -> dict:
             data["status"] = update.status
         if update.linkage_message is not None:
             data["linkage_message"] = update.linkage_message
+        if update.approvalToken is not None:
+            data["approvalToken"] = update.approvalToken
 
         if update.trigger_login:
             now = datetime.now(timezone.utc)
